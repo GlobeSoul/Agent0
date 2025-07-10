@@ -1,5 +1,3 @@
-
-
 # **Dynamic Agency: An Architectural Guide to Self-Expanding, Supervisor-Driven Workflows with LangGraph-TypeScript and MCP**
 
 ## **Introduction**
@@ -8,7 +6,7 @@ The prevailing paradigm in multi-agent systems has largely centered on predefine
 
 The central thesis of this guide is that the confluence of three key technologies enables this new paradigm. First, a controllable, graph-based runtime, for which we will use langgraph-typescript, provides the low-level primitives necessary for building stateful, cyclical, and observable agentic workflows.2 Second, a dynamic agent provisioning mechanism, which we will formalize as the "Agent Factory" pattern, encapsulates the logic for creating new agents as a standard tool. Third, a standardized and, crucially,
 
-*mutable* tool interface, implemented as a custom Model Context Protocol (MCP) server, allows these newly created agents to be exposed and discovered at runtime.4
+_mutable_ tool interface, implemented as a custom Model Context Protocol (MCP) server, allows these newly created agents to be exposed and discovered at runtime.4
 
 This report provides a definitive, code-first blueprint for a system where a supervisor agent, upon identifying a task it cannot delegate, can commission the creation of a new worker agent. This new agent is then programmatically compiled and registered as a discoverable tool on a live MCP server, instantly expanding the supervisor's capabilities without requiring a restart or redeployment. By explicitly avoiding higher-level, vendor-specific abstractions like the OpenAI Agents SDK or Google's ADK, we will construct this system from first principles, offering unparalleled control, transparency, and interoperability.2 This guide is intended for advanced AI engineers seeking to build the next generation of robust, autonomous, and production-grade agentic systems.
 
@@ -33,11 +31,11 @@ import { addMessages } from "@langchain/langgraph/prebuilt";
 
 // A typical state schema for a chat-based agent system.
 export const StateAnnotation \= Annotation.Root({
-  messages: Annotation\<BaseMessage\>({
-    reducer: addMessages, // Appends new messages to the list
-  }),
-  // Other state fields can be added here
-  next: Annotation\<string\>(),
+messages: Annotation\<BaseMessage\>({
+reducer: addMessages, // Appends new messages to the list
+}),
+// Other state fields can be added here
+next: Annotation\<string\>(),
 });
 
 Nodes and Edges
@@ -61,7 +59,7 @@ The decision-making process is orchestrated as follows:
 2. The LLM's output (e.g., a JSON object specifying the next agent and task) updates the graph's state.
 3. A conditional edge connected to the supervisor node reads the state and routes the workflow to the chosen worker node.
 4. The worker node executes its sub-task.
-5. Crucially, every worker node has a static edge that routes control *back* to the supervisor node upon completion. This creates the fundamental supervisor-worker loop, allowing the supervisor to review the worker's output and plan the next step.1
+5. Crucially, every worker node has a static edge that routes control _back_ to the supervisor node upon completion. This creates the fundamental supervisor-worker loop, allowing the supervisor to review the worker's output and plan the next step.1
 
 Agents as Tools
 A powerful abstraction within this pattern is to treat subordinate agents as tools available to the supervisor.24 Instead of complex routing logic, the supervisor's prompt can simply instruct the LLM to call a tool corresponding to the desired worker. For example, a
@@ -76,8 +74,8 @@ MCP is based on a client-server architecture. An MCP Server is a service that ex
 Key Operations
 The protocol standardizes several key interactions, most notably tools/list and tools/call.32
 
-* tools/list: A client sends this request to a server to discover the set of tools it offers, including their names, descriptions, and input schemas.
-* tools/call: After discovering a tool, the client uses this request to execute it, passing the required arguments. The server performs the action and returns the result in a standardized format.
+- tools/list: A client sends this request to a server to discover the set of tools it offers, including their names, descriptions, and input schemas.
+- tools/call: After discovering a tool, the client uses this request to execute it, passing the required arguments. The server performs the action and returns the result in a standardized format.
 
 Significance for Our Architecture
 While LangGraph has a native ToolNode for handling tool calls within a closed graph, integrating MCP elevates our system from a self-contained application to an open, interoperable platform. By exposing our dynamically created agents as tools via a custom MCP server, we make their capabilities available to any external MCP-compliant system. This is the key to building a truly extensible and collaborative agent ecosystem, rather than a monolithic, isolated one.
@@ -97,23 +95,23 @@ import { addMessages } from "@langchain/langgraph/prebuilt";
 
 // The state schema for our supervisor graph.
 export const SupervisorStateAnnotation \= Annotation.Root({
-  // The full conversation history. \`addMessages\` ensures new messages are appended.
-  messages: Annotation\<BaseMessage\>({
-    reducer: addMessages,
-  }),
-  // A registry to hold the compiled graphs of the current worker agents.
-  // This is key for our dynamic architecture.
-  team: Annotation\<Record\<string, CompiledStateGraph\>\>({
-    reducer: (
-      current: Record\<string, CompiledStateGraph\>,
-      next: Record\<string, CompiledStateGraph\>
-    ) \=\> ({...current,...next }),
-    default: () \=\> ({}),
-  }),
-  // The name of the next agent to be invoked, determined by the supervisor.
-  next: Annotation\<string\>(),
-  // The specific sub-task delegated to the worker agent.
-  currentUserRequest: Annotation\<string\>(),
+// The full conversation history. \`addMessages\` ensures new messages are appended.
+messages: Annotation\<BaseMessage\>({
+reducer: addMessages,
+}),
+// A registry to hold the compiled graphs of the current worker agents.
+// This is key for our dynamic architecture.
+team: Annotation\<Record\<string, CompiledStateGraph\>\>({
+reducer: (
+current: Record\<string, CompiledStateGraph\>,
+next: Record\<string, CompiledStateGraph\>
+) \=\> ({...current,...next }),
+default: () \=\> ({}),
+}),
+// The name of the next agent to be invoked, determined by the supervisor.
+next: Annotation\<string\>(),
+// The specific sub-task delegated to the worker agent.
+currentUserRequest: Annotation\<string\>(),
 });
 
 // For convenience, we can export the inferred type.
@@ -130,24 +128,25 @@ TypeScript
 
 // Example prompt construction within the supervisor node
 const constructSupervisorPrompt \= (state: SupervisorState): string \=\> {
-  const teamMembers \= Object.keys(state.team);
-  const toolDescriptions \= \`
-    You have the following agents at your disposal:
-    ${teamMembers.map(agentName \=\> \`- ${agentName}\`).join('\\n')}
+const teamMembers \= Object.keys(state.team);
+const toolDescriptions \= \`
+You have the following agents at your disposal:
+${teamMembers.map(agentName \=\> \`- ${agentName}\`).join('\\n')}
 
     \- FINISH: Use this action when the user's request has been fully addressed.
     \- create\_agent: Use this action when no existing agent can handle the task. Specify the 'specialty' and 'goal' for the new agent.
-  \`;
 
-  return \`You are a supervisor managing a team of AI agents. Your job is to analyze the user's request and delegate it to the appropriate agent or create a new one if necessary.
+\`;
 
-  ${toolDescriptions}
+return \`You are a supervisor managing a team of AI agents. Your job is to analyze the user's request and delegate it to the appropriate agent or create a new one if necessary.
 
-  Based on the following conversation, decide the next action.
-  Conversation History:
-  ${state.messages.map(m \=\> \`${m.\_getType()}: ${m.content}\`).join('\\n')}
+${toolDescriptions}
 
-  Respond with a JSON object matching the required schema.\`;
+Based on the following conversation, decide the next action.
+Conversation History:
+${state.messages.map(m \=\> \`${m.\_getType()}: ${m.content}\`).join('\\n')}
+
+Respond with a JSON object matching the required schema.\`;
 };
 
 Structured Output with Zod
@@ -172,27 +171,27 @@ import { END } from "@langchain/langgraph";
 
 // The router function for the conditional edge.
 const route \= (state: SupervisorState): string \=\> {
-  const { next } \= state;
-  if (next \=== "FINISH") {
-    return END;
-  }
-  if (next \=== "create\_agent") {
-    // We will implement this node in Section 3
-    return "agent\_factory";
-  }
-  // Route to the specified worker agent
-  if (state.team\[next\]) {
-    return next;
-  }
-  // Fallback or error handling
-  return END;
+const { next } \= state;
+if (next \=== "FINISH") {
+return END;
+}
+if (next \=== "create\_agent") {
+// We will implement this node in Section 3
+return "agent\_factory";
+}
+// Route to the specified worker agent
+if (state.team\[next\]) {
+return next;
+}
+// Fallback or error handling
+return END;
 };
 
 // In the graph definition:
 // workflow.addConditionalEdges("supervisor", route, {
-//  ...mapping of agent names to node names...
-//   "agent\_factory": "agent\_factory",
-//  : END,
+// ...mapping of agent names to node names...
+// "agent\_factory": "agent\_factory",
+// : END,
 // });
 
 This function is connected to the supervisor node via workflow.addConditionalEdges, with a mapping that connects the output strings ("agent\_factory", "researcher", etc.) to their corresponding nodes in the graph.15
@@ -212,25 +211,25 @@ import { ChatOpenAI } from "@langchain/openai";
 const researchTool \= new TavilySearchResults({ maxResults: 2 });
 const researchModel \= new ChatOpenAI({ model: "gpt-4o-mini", temperature: 0 });
 const researcherAgent \= createReactAgent({
-  llm: researchModel,
-  tools:,
-  // Checkpointer is omitted here; only the top-level graph has one.
+llm: researchModel,
+tools:,
+// Checkpointer is omitted here; only the top-level graph has one.
 });
 
 // 2\. Create a wrapper node function for the supervisor graph
 const createWorkerNode \= (agent: CompiledStateGraph, name: string) \=\> {
-  return async (state: SupervisorState): Promise\<Partial\<SupervisorState\>\> \=\> {
-    const { currentUserRequest } \= state;
-    // Invoke the worker agent's graph with the specific sub-task
-    const result \= await agent.invoke({
-      messages:,
-    });
-    // Format the output as a ToolMessage to maintain a clean history
-    const finalResponse \= result.messages\[result.messages.length \- 1\];
-    return {
-      messages:,
-    };
-  };
+return async (state: SupervisorState): Promise\<Partial\<SupervisorState\>\> \=\> {
+const { currentUserRequest } \= state;
+// Invoke the worker agent's graph with the specific sub-task
+const result \= await agent.invoke({
+messages:,
+});
+// Format the output as a ToolMessage to maintain a clean history
+const finalResponse \= result.messages\[result.messages.length \- 1\];
+return {
+messages:,
+};
+};
 };
 
 const researcherNode \= createWorkerNode(researcherAgent, "researcher");
@@ -245,6 +244,24 @@ This pattern ensures that the worker agent operates on a clean slate (new HumanM
 
 The ability to dynamically create new agents is the cornerstone of a truly adaptive system. Instead of hard-coding a fixed team, the supervisor can commission new specialists as needed. We achieve this through the "Agent Factory" pattern: a dedicated tool that encapsulates the logic for programmatic agent creation. This approach is superior to granting the supervisor direct, "god-like" access to modify its own runtime, as it maintains a clean separation of concerns and treats agent creation as a standard, observable action.6
 
+### **3.0 MCP Tool Approach (Recommended Implementation)**
+
+The most elegant approach is to implement the Agent Factory as an MCP tool itself. This provides several advantages:
+
+1. **Standardized Interface**: The `create_agent` tool follows MCP standards for input/output schemas
+2. **Dynamic Discovery**: New agents are immediately available as MCP tools
+3. **Interoperability**: Any MCP-compliant system can use the created agents
+4. **Scalability**: Multiple supervisors can share the same agent creation system
+
+**Implementation Strategy:**
+
+- Create a `create_agent` MCP tool that takes agent specifications
+- Use dynamic code generation to create agent implementations
+- Auto-register created agents as new MCP tools
+- Enable immediate invocation through the MCP protocol
+
+This approach transforms the Agent Factory from a hardcoded component into a discoverable, reusable MCP tool that any supervisor can leverage.
+
 ### **3.1 The "Agent Factory" as a Supervisor's Tool**
 
 The supervisor's interaction with the agent creation process is mediated through a simple tool call. When the supervisor's LLM determines that none of the existing agents in its team are suitable for a given task, it will formulate a call to the create\_agent tool.
@@ -257,9 +274,9 @@ import { z } from "zod";
 
 // Zod schema for the input of the create\_agent tool
 export const agentCreationSchema \= z.object({
-  specialty: z.string().describe("A concise description of the new agent's area of expertise. E.g., 'Financial Analyst' or 'Python Code Interpreter'."),
-  goal: z.string().describe("A clear, actionable goal for the new agent. E.g., 'Analyze quarterly earnings reports and extract key metrics.'"),
-  tools: z.array(z.string()).describe("A list of tool names the new agent should have access to from the central tool registry. E.g., \['tavily\_search\_results\_json', 'python\_repl'\]."),
+specialty: z.string().describe("A concise description of the new agent's area of expertise. E.g., 'Financial Analyst' or 'Python Code Interpreter'."),
+goal: z.string().describe("A clear, actionable goal for the new agent. E.g., 'Analyze quarterly earnings reports and extract key metrics.'"),
+tools: z.array(z.string()).describe("A list of tool names the new agent should have access to from the central tool registry. E.g., \['tavily\_search\_results\_json', 'python\_repl'\]."),
 });
 
 This schema-driven approach allows the supervisor to declaratively specify the new agent's persona (specialty), its objective (goal), and its capabilities (tools).
@@ -278,57 +295,57 @@ import { MessagesAnnotation, END, START } from "@langchain/langgraph";
 
 // A central registry of all possible tools the factory can assign
 const toolRegistry \= {
-  tavily\_search\_results\_json: new TavilySearchResults({ maxResults: 2 }),
-  // python\_repl: new PythonREPL(), // Example of another tool
+tavily\_search\_results\_json: new TavilySearchResults({ maxResults: 2 }),
+// python\_repl: new PythonREPL(), // Example of another tool
 };
 
 // The Agent Factory function
 export async function createWorkerAgent(config: z.infer\<typeof agentCreationSchema\>) {
-  const { specialty, goal, tools: toolNames } \= config;
+const { specialty, goal, tools: toolNames } \= config;
 
-  // 1\. Select tools from the registry
-  const selectedTools \= toolNames.map(name \=\> {
-    if (\!toolRegistry\[name\]) {
-      throw new Error(\`Tool "${name}" not found in registry.\`);
-    }
-    return toolRegistry\[name\];
-  });
+// 1\. Select tools from the registry
+const selectedTools \= toolNames.map(name \=\> {
+if (\!toolRegistry\[name\]) {
+throw new Error(\`Tool "${name}" not found in registry.\`);
+}
+return toolRegistry\[name\];
+});
 
-  // 2\. Configure the LLM for the new agent
-  const llm \= new ChatOpenAI({ model: "gpt-4o-mini", temperature: 0 });
-  const modelWithTools \= llm.bindTools(selectedTools);
+// 2\. Configure the LLM for the new agent
+const llm \= new ChatOpenAI({ model: "gpt-4o-mini", temperature: 0 });
+const modelWithTools \= llm.bindTools(selectedTools);
 
-  // 3\. Define the agent's state and nodes
-  const agentState \= MessagesAnnotation;
-  const agentNode \= async (state) \=\> ({ messages: });
-  const toolNode \= new ToolNode(selectedTools);
+// 3\. Define the agent's state and nodes
+const agentState \= MessagesAnnotation;
+const agentNode \= async (state) \=\> ({ messages: });
+const toolNode \= new ToolNode(selectedTools);
 
-  // 4\. Define the routing logic
-  const shouldContinue \= (state) \=\> {
-    const lastMessage \= state.messages\[state.messages.length \- 1\];
-    return lastMessage.tool\_calls?.length? "tools" : END;
-  };
+// 4\. Define the routing logic
+const shouldContinue \= (state) \=\> {
+const lastMessage \= state.messages\[state.messages.length \- 1\];
+return lastMessage.tool\_calls?.length? "tools" : END;
+};
 
-  // 5\. Build and compile the new graph
-  const workflow \= new StateGraph({ channels: agentState })
-   .addNode("agent", agentNode)
-   .addNode("tools", toolNode);
+// 5\. Build and compile the new graph
+const workflow \= new StateGraph({ channels: agentState })
+.addNode("agent", agentNode)
+.addNode("tools", toolNode);
 
-  workflow.addEdge(START, "agent");
-  workflow.addConditionalEdges("agent", shouldContinue, {
-    tools: "tools",
-   : END,
-  });
-  workflow.addEdge("tools", "agent");
+workflow.addEdge(START, "agent");
+workflow.addConditionalEdges("agent", shouldContinue, {
+tools: "tools",
+: END,
+});
+workflow.addEdge("tools", "agent");
 
-  const newAgentGraph \= workflow.compile();
+const newAgentGraph \= workflow.compile();
 
-  // Return the compiled graph and its configuration
-  return {
-    graph: newAgentGraph,
-    name: specialty.toLowerCase().replace(/\\s+/g, '\_'),
-    description: goal,
-  };
+// Return the compiled graph and its configuration
+return {
+graph: newAgentGraph,
+name: specialty.toLowerCase().replace(/\\s+/g, '\_'),
+description: goal,
+};
 }
 
 This factory function is the heart of the system's dynamic nature. It takes a declarative configuration and translates it into a fully functional, compiled agent graph, ready for execution.
@@ -339,7 +356,7 @@ A significant challenge with programmatically generated graphs is persistence. A
 
 The solution is to **store the agent's configuration, not its compiled state**. The Agent Factory does not try to save the newAgentGraph object. Instead, its responsibilities after compilation are:
 
-1. **Store Configuration:** It persists the agent's blueprint—its name, specialty, goal, and list of tool names—to a simple configuration store (for this guide, a local JSON file will suffice; in production, this would be a database). This blueprint contains all the information needed to *re-create* the agent later.
+1. **Store Configuration:** It persists the agent's blueprint—its name, specialty, goal, and list of tool names—to a simple configuration store (for this guide, a local JSON file will suffice; in production, this would be a database). This blueprint contains all the information needed to _re-create_ the agent later.
 2. **Register with MCP Server:** It makes an authenticated API call to a custom /register-agent endpoint on our MCP server. This informs the server that a new tool, representing the newly created agent, is now available for discovery by external clients.
 3. **Update Supervisor's State:** It returns a success message to the supervisor, which then updates its own in-memory team registry. This makes the new agent immediately available for delegation within the current, ongoing workflow.
 
@@ -349,18 +366,18 @@ This approach ensures that while the compiled graph objects are ephemeral, their
 
 To make the supervisor's complex decision-making process transparent, the following table illustrates how different user queries can lead to either delegation or the creation of a new agent. This clarifies the expected behavior of the supervisor's LLM.
 
-| User Query Example | LLM's Reasoning (Chain of Thought) | Supervisor's Structured Output (JSON) | Resulting Action in Graph |
-| :---- | :---- | :---- | :---- |
-| "What was the weather in New York yesterday?" | The query is about a past event. The researcher agent is best suited for web searches. I will delegate this task to the researcher. | { "action": "delegate", "agent": "researcher", "task": "Find the weather in New York for yesterday." } | Route to researcher node. |
-| "Calculate the square root of 529." | This is a mathematical calculation. I have a calculator agent for this. I will delegate. | { "action": "delegate", "agent": "calculator", "task": "Calculate sqrt(529)" } | Route to calculator node. |
+| User Query Example                                                                  | LLM's Reasoning (Chain of Thought)                                                                                                                                                                                                                                     | Supervisor's Structured Output (JSON)                                                                                                                                                | Resulting Action in Graph     |
+| :---------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------- |
+| "What was the weather in New York yesterday?"                                       | The query is about a past event. The researcher agent is best suited for web searches. I will delegate this task to the researcher.                                                                                                                                    | { "action": "delegate", "agent": "researcher", "task": "Find the weather in New York for yesterday." }                                                                               | Route to researcher node.     |
+| "Calculate the square root of 529."                                                 | This is a mathematical calculation. I have a calculator agent for this. I will delegate.                                                                                                                                                                               | { "action": "delegate", "agent": "calculator", "task": "Calculate sqrt(529)" }                                                                                                       | Route to calculator node.     |
 | "Analyze the sentiment of our latest customer reviews and create a summary report." | This is a complex task. I don't have a 'Sentiment Analyst' or 'Report Writer'. I need to create a new agent for this. The specialty will be 'Sentiment Analysis' and the goal will be to process text and identify sentiment. It will need a web search tool to start. | { "action": "create\_agent", "specialty": "Sentiment Analyst", "goal": "Analyze text to determine sentiment and summarize findings.", "tools": \["tavily\_search\_results\_json"\] } | Route to agent\_factory node. |
-| "Thank you, that's all I need." | The user's request is complete. The conversation can end. | { "action": "FINISH" } | Route to END. |
+| "Thank you, that's all I need."                                                     | The user's request is complete. The conversation can end.                                                                                                                                                                                                              | { "action": "FINISH" }                                                                                                                                                               | Route to END.                 |
 
 This table serves as both a design specification and a debugging tool, clearly mapping user intent to the supervisor's programmatic actions.
 
 ## **Section 4: Engineering a Runtime-Mutable MCP Server**
 
-With the agent creation logic defined, we now need a mechanism to expose these dynamically created agents as tools to the outside world. The Model Context Protocol (MCP) provides the standard for this, but a standard MCP server implementation with a static tool list is insufficient. Our architecture requires a server whose list of available tools can be modified *at runtime*. This section details the engineering of such a server using TypeScript, Express.js, and the @modelcontextprotocol/sdk.
+With the agent creation logic defined, we now need a mechanism to expose these dynamically created agents as tools to the outside world. The Model Context Protocol (MCP) provides the standard for this, but a standard MCP server implementation with a static tool list is insufficient. Our architecture requires a server whose list of available tools can be modified _at runtime_. This section details the engineering of such a server using TypeScript, Express.js, and the @modelcontextprotocol/sdk.
 
 ### **4.1 Server Scaffolding with TypeScript, Express, and MCP SDK**
 
@@ -380,8 +397,8 @@ const server \= http.createServer(app);
 
 // Initialize the MCP Server
 const mcpServer \= new McpServer({
-  name: "DynamicAgentServer",
-  version: "1.0.0",
+name: "DynamicAgentServer",
+version: "1.0.0",
 });
 
 // Set up the SSE transport for remote clients
@@ -394,7 +411,7 @@ const PORT \= process.env.PORT |
 
 | 8080;
 server.listen(PORT, () \=\> {
-  console.log(\`MCP Server running on port ${PORT}\`);
+console.log(\`MCP Server running on port ${PORT}\`);
 });
 
 This boilerplate establishes an Express server and connects an McpServer instance to an SSE (Server-Sent Events) endpoint, which is the standard transport mechanism for remote MCP clients.46
@@ -409,25 +426,25 @@ import { Tool } from '@modelcontextprotocol/sdk/server';
 
 // A simple in-memory tool registry
 class ToolManager {
-  private tools: Map\<string, Tool\> \= new Map();
+private tools: Map\<string, Tool\> \= new Map();
 
-  // Method to register a new tool at runtime
-  registerTool(tool: Tool) {
-    this.tools.set(tool.name, tool);
-    console.log(\`Tool registered: ${tool.name}\`);
-  }
+// Method to register a new tool at runtime
+registerTool(tool: Tool) {
+this.tools.set(tool.name, tool);
+console.log(\`Tool registered: ${tool.name}\`);
+}
 
-  // Method to get the list of all currently registered tools
-  getTools(): Tool {
-    return Array.from(this.tools.values());
-  }
+// Method to get the list of all currently registered tools
+getTools(): Tool {
+return Array.from(this.tools.values());
+}
 }
 
 export const toolManager \= new ToolManager();
 
 // Implement the MCP server's list\_tools handler to use the manager
 mcpServer.on("tools/list", async () \=\> {
-  return { tools: toolManager.getTools() };
+return { tools: toolManager.getTools() };
 });
 
 By implementing the tools/list handler to query our ToolManager, the list of tools advertised to clients is no longer static; it reflects the current state of our dynamic registry.
@@ -440,34 +457,34 @@ TypeScript
 
 // A simple API key authentication middleware
 const apiKeyAuth \= (req, res, next) \=\> {
-  const apiKey \= req.headers\['authorization'\]?.split(' ')\[1\];
-  if (apiKey && apiKey \=== process.env.MCP\_SERVER\_API\_KEY) {
-    return next();
-  }
-  res.status(401).send('Unauthorized');
+const apiKey \= req.headers\['authorization'\]?.split(' ')\[1\];
+if (apiKey && apiKey \=== process.env.MCP\_SERVER\_API\_KEY) {
+return next();
+}
+res.status(401).send('Unauthorized');
 };
 
 // The custom endpoint for registering new agents as tools
 app.post('/register-agent', apiKeyAuth, (req, res) \=\> {
-  const { name, description, inputSchema } \= req.body;
+const { name, description, inputSchema } \= req.body;
 
-  if (\!name ||\!description ||\!inputSchema) {
-    return res.status(400).send('Missing required fields: name, description, inputSchema');
-  }
+if (\!name ||\!description ||\!inputSchema) {
+return res.status(400).send('Missing required fields: name, description, inputSchema');
+}
 
-  // Create a tool definition compliant with the MCP SDK
-  const newTool: Tool \= {
-    name,
-    description,
-    inputSchema, // Zod schema should be converted to JSON Schema format
-  };
+// Create a tool definition compliant with the MCP SDK
+const newTool: Tool \= {
+name,
+description,
+inputSchema, // Zod schema should be converted to JSON Schema format
+};
 
-  toolManager.registerTool(newTool);
+toolManager.registerTool(newTool);
 
-  // Optionally, notify connected clients of the change
-  mcpServer.notify("notifications/tools/list\_changed", {});
+// Optionally, notify connected clients of the change
+mcpServer.notify("notifications/tools/list\_changed", {});
 
-  res.status(201).send({ message: \`Agent '${name}' registered successfully as a tool.\` });
+res.status(201).send({ message: \`Agent '${name}' registered successfully as a tool.\` });
 });
 
 This endpoint is protected by a simple API key middleware to prevent unauthorized modification of the tool list.47 It accepts the new agent's metadata, creates an MCP-compliant
@@ -490,16 +507,16 @@ const agentRegistry: Record\<string, CompiledStateGraph\> \= {};
 // Note: In production, this would be populated by re-hydrating agents from the config DB.
 
 mcpServer.on("tools/call", async (request) \=\> {
-  const { name, input, context } \= request;
-  const { thread\_id } \= context; // Assume client passes a thread\_id for statefulness
+const { name, input, context } \= request;
+const { thread\_id } \= context; // Assume client passes a thread\_id for statefulness
 
-  const agentGraph \= agentRegistry\[name\];
-  if (\!agentGraph) {
-    return { isError: true, content: };
-  }
+const agentGraph \= agentRegistry\[name\];
+if (\!agentGraph) {
+return { isError: true, content: };
+}
 
-  try {
-    const config \= { configurable: { thread\_id } };
+try {
+const config \= { configurable: { thread\_id } };
 
     // Invoke the LangGraph agent
     const result \= await agentGraph.invoke({ messages: }, config);
@@ -509,10 +526,11 @@ mcpServer.on("tools/call", async (request) \=\> {
     return {
       content: \[{ type: "text", text: finalMessage.content as string }\],
     };
-  } catch (error) {
-    console.error(\`Error invoking agent ${name}:\`, error);
-    return { isError: true, content: \[{ type: "text", text: \`Error executing tool '${name}'.\` }\] };
-  }
+
+} catch (error) {
+console.error(\`Error invoking agent ${name}:\`, error);
+return { isError: true, content: \[{ type: "text", text: \`Error executing tool '${name}'.\` }\] };
+}
 });
 
 This handler acts as the crucial link between the public-facing MCP protocol and the internal LangGraph runtime. It looks up the requested agent graph, uses the provided thread\_id to ensure stateful execution via the checkpointer, invokes the graph, and formats the final response back into the MCP-specified structure.49
@@ -521,17 +539,17 @@ This handler acts as the crucial link between the public-facing MCP protocol and
 
 While our example uses a simple API key for the registration endpoint, a production system would require more robust security.
 
-* **Authentication:** The custom /register-agent endpoint must be secured. Our API key middleware is a basic first step.51
-* **Authorization:** The MCP specification provides a comprehensive authorization framework based on OAuth 2.1.53 This allows for fine-grained control over which clients can access which tools. For more advanced scenarios, a centralized authorization layer like Cerbos can be used to dynamically control tool availability based on user roles and contextual data, preventing agents from even seeing tools they are not permitted to use.54
+- **Authentication:** The custom /register-agent endpoint must be secured. Our API key middleware is a basic first step.51
+- **Authorization:** The MCP specification provides a comprehensive authorization framework based on OAuth 2.1.53 This allows for fine-grained control over which clients can access which tools. For more advanced scenarios, a centralized authorization layer like Cerbos can be used to dynamically control tool availability based on user roles and contextual data, preventing agents from even seeing tools they are not permitted to use.54
 
 ### **Table: MCP Server API Endpoints**
 
 This table provides a clear reference for developers interacting with our custom MCP server.
 
-| Endpoint | HTTP Method | Description | Authentication | Request Body Schema (JSON) | Success Response |
-| :---- | :---- | :---- | :---- | :---- | :---- |
-| /mcp/sse | GET | Establishes a Server-Sent Events connection for MCP communication. | None | N/A | SSE stream of MCP messages. |
-| /register-agent | POST | Dynamically registers a new agent as a callable tool on the server. | Bearer Token (API Key) | { "name": string, "description": string, "inputSchema": object } | 201 Created with { "message": "Agent registered..." } |
+| Endpoint        | HTTP Method | Description                                                         | Authentication         | Request Body Schema (JSON)                                       | Success Response                                      |
+| :-------------- | :---------- | :------------------------------------------------------------------ | :--------------------- | :--------------------------------------------------------------- | :---------------------------------------------------- |
+| /mcp/sse        | GET         | Establishes a Server-Sent Events connection for MCP communication.  | None                   | N/A                                                              | SSE stream of MCP messages.                           |
+| /register-agent | POST        | Dynamically registers a new agent as a callable tool on the server. | Bearer Token (API Key) | { "name": string, "description": string, "inputSchema": object } | 201 Created with { "message": "Agent registered..." } |
 
 This documentation clarifies the server's interface, separating the standard protocol endpoint from our custom administrative endpoint.
 
@@ -552,7 +570,7 @@ The end-to-end process showcases a remarkable level of autonomy. The system does
 
 This entire sequence—identifying a need, creating a solution, and applying that solution—happens within a single, continuous workflow, driven by the supervisor's reasoning. This is a profound leap beyond static agent teams, demonstrating a system that can modify its own capabilities at runtime.40 It is not merely a tool-user; it is a user of a
 
-*meta-tool* (the Agent Factory) whose purpose is to forge new tools, creating a powerful feedback loop where a capability gap triggers the creation of that very capability.
+_meta-tool_ (the Agent Factory) whose purpose is to forge new tools, creating a powerful feedback loop where a capability gap triggers the creation of that very capability.
 
 ### **5.2 Stateful Invocation Across the System Boundary**
 
@@ -571,9 +589,9 @@ The following diagram illustrates the complete, multi-layered architecture, trac
 Code snippet
 
 graph TD
-    subgraph Client
-        A\[External MCP Client\]
-    end
+subgraph Client
+A\[External MCP Client\]
+end
 
     subgraph "MCP Server (Express.js)"
         B
@@ -629,9 +647,9 @@ This diagram visually synthesizes the entire system. The **Invocation Flow** (bl
 
 A complete, runnable version of this project would be organized into a monorepo with distinct packages for the server and the graph logic.
 
-* /packages/mcp-server: Contains the Express.js application, the ToolManager, the API endpoints, and the call\_tool bridge.
-* /packages/supervisor-graph: Contains the LangGraph implementation, including the SupervisorState definition, the supervisor and worker node functions, the Agent Factory, and the initial agent configurations.
-* docker-compose.yml: At the root, to orchestrate the services for local development.
+- /packages/mcp-server: Contains the Express.js application, the ToolManager, the API endpoints, and the call\_tool bridge.
+- /packages/supervisor-graph: Contains the LangGraph implementation, including the SupervisorState definition, the supervisor and worker node functions, the Agent Factory, and the initial agent configurations.
+- docker-compose.yml: At the root, to orchestrate the services for local development.
 
 The code would be heavily commented, linking implementation details back to the architectural concepts discussed in this report, providing a clear and replicable blueprint for developers.
 
@@ -661,11 +679,11 @@ LANGCHAIN\_TRACING\_V2, LANGCHAIN\_API\_KEY), every invocation of our LangGraph 
 
 A detailed trace in LangSmith provides a hierarchical view of the entire execution, allowing us to inspect:
 
-* The top-level run initiated by the MCP server's call\_tool handler.
-* The supervisor node's LLM call, including the exact prompt sent and the structured JSON it received back.
-* The invocation of a worker agent as a nested subgraph, clearly showing the delegation.
-* The worker agent's own internal tool calls and reasoning steps.
-* Crucially, LangSmith automatically tracks performance metrics like **latency** and **token usage** for every step.70 This is vital for identifying performance bottlenecks and managing the operational costs of the system, as unchecked conversational memory or inefficient tool use can lead to spiraling expenses.72
+- The top-level run initiated by the MCP server's call\_tool handler.
+- The supervisor node's LLM call, including the exact prompt sent and the structured JSON it received back.
+- The invocation of a worker agent as a nested subgraph, clearly showing the delegation.
+- The worker agent's own internal tool calls and reasoning steps.
+- Crucially, LangSmith automatically tracks performance metrics like **latency** and **token usage** for every step.70 This is vital for identifying performance bottlenecks and managing the operational costs of the system, as unchecked conversational memory or inefficient tool use can lead to spiraling expenses.72
 
 ### **6.3 Deployment Strategy: Containerization with Docker**
 
@@ -688,10 +706,10 @@ The integration of LangGraph's stateful, cyclical execution with a persistent ch
 
 This architecture opens up several promising avenues for future research and development:
 
-* **Decentralized Agent Registry:** The current ToolManager is a centralized, in-memory component. A future iteration could replace this with a distributed, persistent agent registry, allowing for greater scalability and fault tolerance.
-* **Reflective Meta-Supervision:** The supervisor currently creates agents but does not evaluate their performance. A "meta-supervisor" could be developed to monitor the success rate, cost, and latency of its workers. It could autonomously decide to retire underperforming agents, fine-tune their prompts, or commission replacements with different toolsets, creating a self-optimizing system.
-* **Advanced Communication Protocols:** While MCP's client-server model is effective, future systems could explore more decentralized communication patterns, such as a shared event bus (e.g., Apache Kafka) or peer-to-peer protocols, to enable more complex and resilient inter-agent collaboration.78
-* **Automated Tool Composition:** The current Agent Factory relies on the supervisor to specify which pre-existing tools a new agent should have. A more advanced system could allow an agent to *compose* new, complex tools from a set of simpler primitives, further enhancing its problem-solving capabilities.
+- **Decentralized Agent Registry:** The current ToolManager is a centralized, in-memory component. A future iteration could replace this with a distributed, persistent agent registry, allowing for greater scalability and fault tolerance.
+- **Reflective Meta-Supervision:** The supervisor currently creates agents but does not evaluate their performance. A "meta-supervisor" could be developed to monitor the success rate, cost, and latency of its workers. It could autonomously decide to retire underperforming agents, fine-tune their prompts, or commission replacements with different toolsets, creating a self-optimizing system.
+- **Advanced Communication Protocols:** While MCP's client-server model is effective, future systems could explore more decentralized communication patterns, such as a shared event bus (e.g., Apache Kafka) or peer-to-peer protocols, to enable more complex and resilient inter-agent collaboration.78
+- **Automated Tool Composition:** The current Agent Factory relies on the supervisor to specify which pre-existing tools a new agent should have. A more advanced system could allow an agent to _compose_ new, complex tools from a set of simpler primitives, further enhancing its problem-solving capabilities.
 
 By continuing to build upon these open and controllable foundations, the developer community can push the boundaries of what is possible with multi-agent systems, moving closer to the goal of creating truly intelligent and adaptive AI.
 
