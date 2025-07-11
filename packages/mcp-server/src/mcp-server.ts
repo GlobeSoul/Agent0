@@ -1,10 +1,16 @@
-/// <reference lib="deno.ns" />
-
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { getConfig } from '@dynamic-agency/config';
-import { agentFactory } from './agent-factory.ts';
+import { agentFactory } from './agent-factory.js';
+import express, { Request, Response } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Import the AgentCreationRequest type
 interface AgentCreationRequest {
@@ -25,19 +31,21 @@ interface RegisteredAgent {
 
 // Module-level registry for dynamic agents
 const registeredAgents = new Map<string, RegisteredAgent>();
-const AGENTS_FILE = new URL('./agents.json', import.meta.url).pathname;
+
+// Update AGENTS_FILE for Node.js
+const AGENTS_FILE = path.resolve(__dirname, 'agents.json');
 
 // Load agents from persistent storage
 async function loadAgentsFromFile() {
   try {
-    const data = await Deno.readTextFile(AGENTS_FILE);
+    const data = await fs.readFile(AGENTS_FILE, 'utf-8');
     const agents: RegisteredAgent[] = JSON.parse(data);
-    agents.forEach(agent => {
+    agents.forEach((agent: RegisteredAgent) => {
       registeredAgents.set(agent.name, agent);
     });
     console.log(`✅ Loaded ${agents.length} agents from persistent storage.`);
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) {
+    if ((err as any).code === 'ENOENT') {
       console.log('ℹ️ No agents.json file found, starting with empty registry.');
     } else {
       console.error('❌ Failed to load agents from file:', err);
@@ -49,7 +57,7 @@ async function loadAgentsFromFile() {
 async function saveAgentsToFile() {
   try {
     const agents = Array.from(registeredAgents.values());
-    await Deno.writeTextFile(AGENTS_FILE, JSON.stringify(agents, null, 2));
+    await fs.writeFile(AGENTS_FILE, JSON.stringify(agents, null, 2), 'utf-8');
     console.log('💾 Agents saved to persistent storage.');
   } catch (err) {
     console.error('❌ Failed to save agents to file:', err);
@@ -198,25 +206,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   try {
     await loadAgentsFromFile();
-    const config = await getConfig();
+    // Use process.env for config
+    const port = process.env.MCP_SERVER_PORT ? parseInt(process.env.MCP_SERVER_PORT, 10) : 8080;
+    const apiKey = process.env.MCP_SERVER_API_KEY;
     console.log('✅ MCP Server package loaded successfully');
     console.log('📊 Configuration:', {
-      port: config.server.port,
-      apiKey: config.server.apiKey ? '***' : 'not set',
+      port,
+      apiKey: apiKey ? '***' : 'not set',
     });
 
     console.log('🚀 Starting MCP server with official SDK...');
 
-    // Create transport and start server
-    const transport = new StdioServerTransport();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => crypto.randomUUID(),
+    });
     await server.connect(transport);
 
-    console.log('✅ MCP server started successfully');
-    console.log('📋 Available tools: create_agent + dynamic agents');
+    const app = express();
+    app.use('/', (req: Request, res: Response) => {
+      transport.handleRequest(req, res);
+    });
+
+    app.listen(port, () => {
+      console.log(`✅ MCP server started successfully on port ${port}`);
+      console.log('📋 Available tools: create_agent + dynamic agents');
+    });
   } catch (error) {
     console.error('❌ Error starting MCP server:', error);
-    Deno.exit(1);
+    process.exit(1);
   }
 }
 
 export { main, server };
+
+// Auto-start the server when this file is run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(console.error);
+}

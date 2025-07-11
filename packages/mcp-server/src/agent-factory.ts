@@ -1,5 +1,3 @@
-/// <reference lib="deno.ns" />
-
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { z } from 'zod';
 import { getConfig } from '@dynamic-agency/config';
@@ -39,7 +37,7 @@ const agentCreationSchema = z.object({
 
 // Agent factory function for MCP tool
 export async function createAgent(request: AgentCreationRequest): Promise<CreatedAgent> {
-  const config = await getConfig();
+  const config = getConfig();
 
   const llm = new ChatGoogleGenerativeAI({
     model: config.google.model,

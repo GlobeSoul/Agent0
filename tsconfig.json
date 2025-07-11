@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "include": [
+    "packages/*/src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "references": [
+    { "path": "./packages/config" },
+    { "path": "./packages/mcp-server" },
+    { "path": "./packages/supervisor-graph" }
+  ]
+}

@@ -1,11 +1,9 @@
-/// <reference lib="deno.ns" />
-
 import { getConfig } from '@dynamic-agency/config';
 
 // Main function to test the supervisor graph setup
 async function main() {
   try {
-    const config = await getConfig();
+    const config = getConfig();
     console.log('✅ Supervisor Graph package loaded successfully');
     console.log('📊 Configuration:', {
       model: config.google.model,
@@ -21,11 +19,12 @@ async function main() {
     console.log('  4. Test end-to-end MCP-based agent creation');
   } catch (error) {
     console.error('❌ Error loading configuration:', error);
-    Deno.exit(1);
+    process.exit(1);
   }
 }
 
-if (import.meta.main) {
+// Check if this module is the main module for Node.js
+if (process.argv[1] === new URL(import.meta.url).pathname) {
   main();
 }
 

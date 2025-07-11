@@ -1,9 +1,7 @@
-/// <reference lib="deno.ns" />
-/// <reference lib="dom" />
-
-import { load } from '@std/dotenv';
-import { resolve } from '@std/path';
+import dotenv from 'dotenv';
 import { z } from 'zod';
+
+dotenv.config();
 
 // Default configuration constants
 const DEFAULTS = {
@@ -32,23 +30,10 @@ const configSchema = z.object({
 // Type inference from schema
 export type Config = z.infer<typeof configSchema>;
 
-// Load environment variables from .env file
-async function loadEnvVars(): Promise<Record<string, string>> {
-  try {
-    const workspaceRoot = resolve(Deno.cwd(), '../../');
-    return await load({ envPath: resolve(workspaceRoot, '.env.test') });
-  } catch {
-    // .env file doesn't exist, return empty object
-    return {};
-  }
-}
-
 // Parse and validate configuration
-async function createConfig(): Promise<Config> {
-  const envVars = await loadEnvVars();
-
+function createConfig(): Config {
   const getEnv = (key: string, defaultValue?: string): string => {
-    return envVars[key] || Deno.env.get(key) || defaultValue || '';
+    return process.env[key] || defaultValue || '';
   };
 
   const rawConfig = {
@@ -70,16 +55,16 @@ async function createConfig(): Promise<Config> {
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('Configuration validation failed:');
-      (error as z.ZodError).errors.forEach((err: z.ZodIssue) => {
+      error.issues.forEach((err) => {
         console.error(`  ${err.path.join('.')}: ${err.message}`);
       });
-      Deno.exit(1);
+      process.exit(1);
     }
     throw error;
   }
 }
 
-// Export async configuration loader
+// Export sync configuration loader
 export const getConfig = createConfig;
 
 // Export schema for external validation

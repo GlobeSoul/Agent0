@@ -1,0 +1,39 @@
+{
+  "name": "@dynamic-agency/root",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@8.15.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:config": "pnpm --filter @dynamic-agency/config run dev",
+    "dev:supervisor": "pnpm --filter @dynamic-agency/supervisor-graph run dev",
+    "dev:server": "pnpm --filter @dynamic-agency/mcp-server run dev",
+    "build": "turbo build",
+    "watch": "turbo watch",
+    "test": "pnpm --filter '*' run test",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write .",
+    "typecheck": "pnpm --filter '*' run typecheck",
+    "clean": "pnpm --filter '*' run clean",
+    "inspector": "DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.3",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
+    "concurrently": "^9.2.0",
+    "eslint": "^9.30.1",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.3",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
