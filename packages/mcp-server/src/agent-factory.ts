@@ -54,7 +54,7 @@ export async function createAgent(request: AgentCreationRequest): Promise<Create
   Specialty: ${request.specialty}
   Goal: ${request.goal}
   Task: ${request.task}
-  Agent Type: ${request.agent_type || 'general'}
+  Agent Type: ${request.agent_type ?? 'general'}
 
   Create an agent with:
   1. A descriptive name (use snake_case)

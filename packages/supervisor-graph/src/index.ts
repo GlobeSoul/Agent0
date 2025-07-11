@@ -1,7 +1,7 @@
 import { getConfig } from '@dynamic-agency/config';
 
 // Main function to test the supervisor graph setup
-async function main() {
+function main() {
   try {
     const config = getConfig();
     console.log('✅ Supervisor Graph package loaded successfully');
@@ -25,7 +25,7 @@ async function main() {
 
 // Check if this module is the main module for Node.js
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  main();
+  void main();
 }
 
 export { main };

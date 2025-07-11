@@ -1,9 +1,9 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { getConfig } from '@dynamic-agency/config';
+// import { getConfig } from '@dynamic-agency/config'; // Commented out as currently using process.env directly
 import { agentFactory } from './agent-factory.js';
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -45,7 +45,7 @@ async function loadAgentsFromFile() {
     });
     console.log(`✅ Loaded ${agents.length} agents from persistent storage.`);
   } catch (err) {
-    if ((err as any).code === 'ENOENT') {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       console.log('ℹ️ No agents.json file found, starting with empty registry.');
     } else {
       console.error('❌ Failed to load agents from file:', err);
@@ -111,7 +111,7 @@ const createAgentTool = {
 };
 
 // Register the create_agent tool
-server.setRequestHandler(ListToolsRequestSchema, async () => {
+server.setRequestHandler(ListToolsRequestSchema, () => {
   const tools = [
     createAgentTool,
     // Add dynamically registered agents
@@ -154,7 +154,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         registeredAt: new Date().toISOString(),
         status: 'active',
       });
-      await saveAgentsToFile();
+      void saveAgentsToFile();
 
       console.log('✅ Agent created and registered:', agent.name);
 
@@ -224,12 +224,17 @@ async function main() {
 
     const app = express();
     app.use('/', (req: Request, res: Response) => {
-      transport.handleRequest(req, res);
+      void transport.handleRequest(req, res);
     });
 
-    app.listen(port, () => {
+    const serverInstance = app.listen(port, () => {
       console.log(`✅ MCP server started successfully on port ${port}`);
       console.log('📋 Available tools: create_agent + dynamic agents');
+    });
+
+    // Handle server errors
+    serverInstance.on('error', (error) => {
+      console.error('❌ Server error:', error);
     });
   } catch (error) {
     console.error('❌ Error starting MCP server:', error);
@@ -241,5 +246,5 @@ export { main, server };
 
 // Auto-start the server when this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
+  void main().catch(console.error);
 }

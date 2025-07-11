@@ -19,6 +19,7 @@
     "dev": "tsc -w",
     "test": "node --test",
     "typecheck": "tsc --noEmit",
+    "lint": "echo 'Linting handled by root ESLint config'",
     "clean": "rm -rf dist"
   },
   "dependencies": {

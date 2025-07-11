@@ -33,7 +33,7 @@ export type Config = z.infer<typeof configSchema>;
 // Parse and validate configuration
 function createConfig(): Config {
   const getEnv = (key: string, defaultValue?: string): string => {
-    return process.env[key] || defaultValue || '';
+    return process.env[key] ?? defaultValue ?? '';
   };
 
   const rawConfig = {
