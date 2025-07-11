@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "dev": "tsc -w",
+    "dev": "echo 'Dev mode not implemented'",
     "test": "node --test",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'Linting handled by root ESLint config'",
