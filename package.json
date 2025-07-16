@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@8.15.0",
+  "packageManager": "pnpm@10.13.1",
   "workspaces": [
     "packages/*"
   ],
@@ -34,7 +34,7 @@
     "typescript-eslint": "^8.36.0"
   },
   "engines": {
-    "node": ">=22.0.0",
-    "pnpm": ">=8.0.0"
+    "node": ">=22.16",
+    "pnpm": ">=10.13.1"
   }
 }

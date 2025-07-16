@@ -1,7 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-// import { getConfig } from '@dynamic-agency/config'; // Commented out as currently using process.env directly
+import { getConfig } from '@dynamic-agency/config';
 import { agentFactory } from './agent-factory.js';
 import express, { type Request, type Response } from 'express';
 import fs from 'fs/promises';
@@ -206,9 +206,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   try {
     await loadAgentsFromFile();
-    // Use process.env for config
-    const port = process.env.MCP_SERVER_PORT ? parseInt(process.env.MCP_SERVER_PORT, 10) : 8080;
-    const apiKey = process.env.MCP_SERVER_API_KEY;
+    const config = getConfig();
+    const port = config.server.port;
+    const apiKey = config.server.apiKey;
     console.log('✅ MCP Server package loaded successfully');
     console.log('📊 Configuration:', {
       port,
